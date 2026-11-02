@@ -1,0 +1,21 @@
+id,name,category,risk_tier
+M001,Shields-Brown,groceries,high
+M002,"Joyce, Garcia and Powell",dining,low
+M003,Mcbride-Rodriguez,healthcare,low
+M004,Lee Group,clothing,high
+M005,Henderson LLC,travel,low
+M006,Wright-Leblanc,clothing,low
+M007,Morton-Chase,healthcare,low
+M008,Williams PLC,healthcare,low
+M009,Novak and Sons,entertainment,low
+M010,Russell Group,groceries,low
+M011,Hancock Inc,groceries,medium
+M012,Gray Group,groceries,low
+M013,House-Glover,healthcare,low
+M014,Henderson-Bernard,travel,low
+M015,"Stanley, Tucker and Lee",electronics,medium
+M016,Novak PLC,electronics,low
+M017,"Daniels, Adkins and Brown",dining,low
+M018,"Woods, Calhoun and Schmidt",dining,low
+M019,Yu Inc,groceries,medium
+M020,Jones Inc,clothing,medium
