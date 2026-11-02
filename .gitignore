@@ -1,0 +1,12 @@
+# Virtual environment
+venv/
+.venv/
+
+# VS Code settings
+.vscode/
+
+# Workspace files
+*.code-workspace
+
+# Git
+.git/
