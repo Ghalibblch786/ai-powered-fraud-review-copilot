@@ -33,7 +33,7 @@ fraud-review-copilot/
 │ ├── guardrail.py # PII redaction + language constraints
 │ └── api.py # FastAPI app
 ├── eval/
-│ ├── eval_set.json # 18 hand-labeled cases
+│ ├── eval_set.json # 19 hand-labeled cases
 │ └── run_eval.py # scores the agent against eval_set.json
 └── tests/
 
@@ -79,8 +79,13 @@ python -m eval.run_eval
 - Scripts that import from other `src/` modules (`agent.py` and beyond) must be run with `python -m src.<name>`, not `python src/<name>.py` — only standalone scripts with no cross-module imports (`flagger.py`, `retrieval.py`, `tools.py`) support the direct form. This applies to `eval/run_eval.py` too: run as `python -m eval.run_eval`.
 
 ## Known gaps (dated)
-- **Eval accuracy as of Action 17 (Day 4): 61.1% (11/18) — below SCOPE.md's 80% bar.** By flag type: `geo_anomaly` 4/5 (80%), `velocity_spike` 3/4 (75%), `amount_spike` 3/5 (60%), `new_merchant_category` 1/4 (25%). Two real patterns surfaced, not noise:
-  - `new_merchant_category` fails in both directions, not just one bias: escalated two cases (T0071, T0091) where the ground truth said clear (normal amount, low/medium-risk merchant, nothing but a new category) and cleared the one case (T0133) where the ground truth said escalate specifically because of a 28-day-old account — the account-takeover signal the knowledge base describes.
-  - `amount_spike`'s two misses (T0078, T0143) share a shape: both were labeled escalate purely on amount magnitude at a low-risk merchant, and the agent cleared both — possibly anchoring on the merchant's low risk tag over the raw amount deviation. Not yet confirmed against the actual `case_note` text.
-  - To investigate: pull the real `case_note` text for these five misses to see the agent's actual reasoning, not just the final verdict:
-    `python -m eval.run_eval --only T0071,T0091,T0133,T0078,T0143`
+- **Eval accuracy, 2026-11-05: 18/18 (100%) on the original 18 cases in a full local run; 6/6 on the CI subset (GitHub Actions run 41916910504). Meets SCOPE.md's 80% bar.** Up from **61.1% (11/18) on Day 4** (`geo_anomaly` 4/5, `velocity_spike` 3/4, `amount_spike` 3/5, `new_merchant_category` 1/4). The gain has two sources, reported separately:
+  - **Agent got better (prompt fix in `src/agent.py`):** two instructions were added — compare earlier purchase sizes before treating a familiar merchant as reassuring, and let a risk factor that matches a reference pattern meaningfully affect the recommendation. This fixed T0078 (familiar merchant read as reassuring) and T0133 (28-day-old account recognized as a risk, then cleared anyway).
+  - **Answer key changed:** T0143 was relabeled escalate -> clear on Day 6 (Action 23) after the agent's own evidence showed C026 already had purchases above the $89.12 ceiling (T0063 $164.50, T0125 $116.31). Scored against the original label, the same run is 17/18.
+  - **Not attributed:** T0071 passed on a rerun with no fix, so it is treated as ordinary variation. The Day 4 misses T0091 and two others were never named in the record, so how they were fixed is unknown. The Day 4 `eval_set.json` was never committed, so other label changes between Day 4 and now can't be ruled out.
+  - Scores vary between runs (T0018 once failed after the prompt change, then passed; confidence on T0133 was 0.65 and 0.75 on two runs). Treat 18/18 as one good run, not a guarantee. CI tolerates one miss in 6.
+- **T0143 relabel is shaky.** T0063 and T0125, the "normal spend" evidence for clear, were both flagged themselves (amount_spike, geo_anomaly). It is also inconsistent with T0081 below, which treats the T0063 cluster as suspicious. Re-label T0143 from the data alone, without looking at what the agent said.
+- **T0081 (`velocity_spike`, escalate) currently FAILS — added 2026-11-05, the first velocity escalate case.** Before it, all 4 velocity cases were `clear`, so nothing tested escalating a real burst. T0081 is the third transaction for C026 in about 16 hours, across three locations and three merchants, with T0063 ($164.50) above the customer's ceiling. The agent cleared it (0.85) while listing "burst of activity" and "location mismatch" as risk factors; its evidence text discussed only T0081's own amount and merchant and never mentioned the earlier transactions. With T0081 the full eval is 18/19 (94.7%). It is not in the CI subset, so CI is unaffected. Root-cause or re-examine the label before changing the prompt, and run the full eval after any prompt change.
+- **Evidence text can contradict the recommendation.** On T0133 the note listed one reason to escalate and several reasons the transaction looks normal ("However..."), so an analyst may wonder why it escalated. Not fixed.
+- **Missing spaces in generated evidence** ("Thetransaction", "merchantis") seen once on the Render deployment, not locally. Not caused by `redact_pii`: it only substitutes name parts with `[CUSTOMER]` and never deletes characters (checked 2026-11-05), so this is model output. Cosmetic; not fixed.
+- **The deployed API has no authentication.** Anyone with the Render address can call `/review/{transaction_id}` and spend the Gemini quota.

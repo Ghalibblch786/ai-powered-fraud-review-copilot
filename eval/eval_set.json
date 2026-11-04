@@ -106,5 +106,11 @@
     "expected_recommendation": "escalate",
     "expected_flag_reason": "new_merchant_category",
     "reasoning": "The account is only 28 days old — new-category spending on a brand-new account is the account-takeover pattern described in the knowledge base, even though the amount itself looks ordinary."
+  },
+  {
+    "transaction_id": "T0081",
+    "expected_recommendation": "escalate",
+    "expected_flag_reason": "velocity_spike",
+    "reasoning": "Third transaction on this account in about 16 hours (T0063 $164.50, T0049 $57.04, T0081 $79.43), spread across three different locations and three unrelated merchants, and the first is already well above the customer's $89.12 typical ceiling. Matches the velocity doc's escalate signals (burst + different locations + an above-range amount) even though T0081's own amount is ordinary. First velocity_spike escalate case; added 2026-11-05 from the transaction data alone, before any agent run."
   }
 ]
