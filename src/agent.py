@@ -40,6 +40,7 @@ import os
 import sys
 import csv
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -144,6 +145,75 @@ def generate_with_retry(client, model, contents, config, max_attempts=4, initial
             delay *= 2
 
 
+# Velocity bursts: the flagger fires on a transaction plus any earlier one on
+# the same account within this window, so the burst is computed the same way.
+VELOCITY_WINDOW = timedelta(hours=24)
+NEW_ACCOUNT_DAYS = 60  # the knowledge-base docs treat "under 60 days" as very new
+
+
+def build_velocity_summary(transaction):
+    """
+    Deterministic facts about a velocity burst, computed in code and handed to
+    the model, because the model was not reliably doing this arithmetic itself
+    (it saw the burst but let the flagged transaction's own ordinary amount
+    outweigh warning signs elsewhere in it -- see CLAUDE.md, T0081).
+
+    The burst is the flagged transaction plus every earlier transaction on
+    the account within VELOCITY_WINDOW. Warning signs follow
+    knowledge_base/velocity_fraud.md: an amount above the customer's typical
+    maximum, a location away from home, a high-risk merchant, a very new
+    account. Returns None for any flag other than velocity_spike. Facts only;
+    the recommendation is still the model's.
+    """
+    if transaction["flag_reason"] != "velocity_spike":
+        return None
+
+    customer = lookup_customer_history(transaction["customer_id"])
+    ceiling = float(customer["typical_spend_max"])
+    home = customer["home_location"]
+    flagged_time = datetime.fromisoformat(transaction["timestamp"])
+
+    earlier = []
+    for t in customer["recent_transactions"]:
+        gap = flagged_time - datetime.fromisoformat(t["timestamp"])
+        if t["id"] != transaction["id"] and timedelta(0) <= gap <= VELOCITY_WINDOW:
+            earlier.append((t, gap))
+    earlier.sort(key=lambda pair: pair[1], reverse=True)  # oldest first
+
+    members = [(transaction, None)] + earlier
+    lines, signs = [], []
+    for t, gap in members:
+        amount = float(t["amount"])
+        risk = lookup_merchant_info(t["merchant_id"])["risk_tier"]
+        away = t["location"] != home
+        when = "the flagged transaction" if gap is None else f"{gap.total_seconds() / 3600:.1f}h before the flagged transaction"
+        lines.append(
+            f"- {t['id']}: ${amount:.2f} ({amount / ceiling:.2f}x the customer's typical maximum of ${ceiling:.2f}), "
+            f"{'AWAY from home' if away else 'at home'} ({t['location']}), merchant risk {risk}, {when}"
+        )
+        if amount > ceiling:
+            signs.append(f"amount above the typical maximum ({t['id']})")
+        if away:
+            signs.append(f"away from home ({t['id']})")
+        if risk == "high":
+            signs.append(f"high-risk merchant ({t['id']})")
+    if int(customer["account_age_days"]) < NEW_ACCOUNT_DAYS:
+        signs.append(f"very new account ({customer['account_age_days']} days)")
+
+    return (
+        "Velocity burst facts, computed from the data (the flagged transaction plus "
+        f"{len(earlier)} earlier transaction(s) within 24 hours on this account):\n"
+        + "\n".join(lines)
+        + "\nWarning signs found anywhere in this burst: "
+        + ("; ".join(signs) if signs else "none")
+        + ".\n"
+        "Apply the reference material's decision rule to the whole burst, not just "
+        "the flagged transaction. Lean escalate when this list contains any warning "
+        "sign; lean clear only when it says none. An ordinary amount or merchant on "
+        "the flagged transaction does not offset a warning sign elsewhere in the burst."
+    )
+
+
 def get_transaction(transaction_id):
     with open(TRANSACTIONS_PATH, newline="") as f:
         for row in csv.DictReader(f):
@@ -223,7 +293,7 @@ def run_tool_calling_phase(client, transaction):
     return contents, tools_called, total_tokens
 
 
-def run_generation_phase(client, contents, fraud_pattern_doc, fraud_pattern_source):
+def run_generation_phase(client, contents, fraud_pattern_doc, fraud_pattern_source, extra_context=None):
     """
     Phase 2: a fresh call with response_schema=CaseNote set, no tools
     declared. Returns the drafted case note and this call's token usage.
@@ -246,6 +316,8 @@ def run_generation_phase(client, contents, fraud_pattern_doc, fraud_pattern_sour
         "influence your recommendation — don't name a matching signal as "
         "evidence and then recommend as if it didn't apply."
     )
+    if extra_context:
+        grounding_instruction += "\n\n" + extra_context
     contents = contents + [types.Content(role="user", parts=[types.Part(text=grounding_instruction)])]
 
     config = types.GenerateContentConfig(
@@ -268,7 +340,10 @@ def draft_case_note(transaction_id):
 
     fraud_pattern_doc, fraud_pattern_source = retrieve_fraud_pattern(transaction["flag_reason"])
     contents, tools_called, phase1_tokens = run_tool_calling_phase(client, transaction)
-    case_note, phase2_tokens = run_generation_phase(client, contents, fraud_pattern_doc, fraud_pattern_source)
+    case_note, phase2_tokens = run_generation_phase(
+        client, contents, fraud_pattern_doc, fraud_pattern_source,
+        extra_context=build_velocity_summary(transaction),
+    )
     total_tokens = phase1_tokens + phase2_tokens
 
     # Guardrail (Generate -> Guardrail per the architecture's stage order).
