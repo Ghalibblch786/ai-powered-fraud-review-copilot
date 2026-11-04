@@ -57,7 +57,7 @@
     "transaction_id": "T0143",
     "expected_recommendation": "clear",
     "expected_flag_reason": "amount_spike",
-    "reasoning": "Initially labeled escalate on magnitude alone (~55% over the stated $89.12 ceiling). Revisited on Day 6 (Action 23) after the agent's own evidence surfaced two prior transactions for this same customer already above that ceiling -- $164.50 (T0063, larger than this transaction) and $116.31 (T0125) -- indicating a real behavioral pattern the original static-ceiling comparison missed. Reads as ordinary variance for this specific customer, not an anomaly."
+    "reasoning": "Borderline, labeled clear. Amount is 1.55x the customer's $89.12 ceiling, but it is the only signal: at the home location, at a low-risk dining merchant the customer has used before (T0141, T0081, both in range), on a 2,399-day-old account, with no burst, no location anomaly and no new category. Consistent with the other amount_spike labels: T0078 (2.75x, nothing else) is escalate on magnitude alone, which is far larger than this; T0014 (1.29x) is escalate only because the merchant is high-risk. Re-derived 2026-11-05 from the transaction data alone. The earlier reasoning treated C026's earlier above-ceiling purchases (T0063, T0125) as proof of normal spending; they were themselves flagged and unreviewed, so they are NOT used here. Close call: C026 has three earlier above-ceiling purchases, which could equally mean the ceiling is understated or the account is being misused."
   },
   {
     "transaction_id": "T0018",
@@ -67,21 +67,21 @@
   },
   {
     "transaction_id": "T0132",
-    "expected_recommendation": "clear",
+    "expected_recommendation": "escalate",
     "expected_flag_reason": "velocity_spike",
-    "reasoning": "Amount is comfortably within typical range; a medium-risk merchant alone doesn't outweigh an otherwise ordinary transaction."
+    "reasoning": "Relabeled clear -> escalate 2026-11-05, applying the velocity doc's rule (burst + an above-range amount). Burst partner T0042, 11.9h earlier, was $1,191.36 (1.55x the $770.78 ceiling, flagged amount_spike). WEAKEST of the velocity labels: it has only this one warning sign, the flagged transaction is small (0.34x ceiling, home), and all locations are home. A reasonable analyst could clear it."
   },
   {
     "transaction_id": "T0023",
-    "expected_recommendation": "clear",
+    "expected_recommendation": "escalate",
     "expected_flag_reason": "velocity_spike",
-    "reasoning": "Amount and location are both normal for this customer; the merchant's high risk tier is a static tag rather than evidence tied to this specific transaction."
+    "reasoning": "Relabeled clear -> escalate 2026-11-05, applying the velocity doc's rule (burst + more than one warning sign). Two signs: the flagged transaction is at a HIGH-risk merchant, and burst partner T0093, 14.0h earlier, was away from home (Hoffmanville, geo_anomaly). Amounts are all within range."
   },
   {
     "transaction_id": "T0102",
-    "expected_recommendation": "clear",
+    "expected_recommendation": "escalate",
     "expected_flag_reason": "velocity_spike",
-    "reasoning": "In-range amount, low-risk merchant, and a very long account history consistent with this customer's other low-risk transactions."
+    "reasoning": "Relabeled clear -> escalate 2026-11-05, applying knowledge_base/velocity_fraud.md's rule that a burst plus another warning sign leans escalate. Burst partner T0002, 6.1h earlier, was $228.44 (1.96x the $116.81 ceiling) and away from home (South David, geo_anomaly). The flagged transaction itself is ordinary ($85.17, home, low-risk), but the doc says the burst is the signal 'regardless of whether the individual amounts look normal'."
   },
   {
     "transaction_id": "T0055",
@@ -106,5 +106,11 @@
     "expected_recommendation": "escalate",
     "expected_flag_reason": "new_merchant_category",
     "reasoning": "The account is only 28 days old — new-category spending on a brand-new account is the account-takeover pattern described in the knowledge base, even though the amount itself looks ordinary."
+  },
+  {
+    "transaction_id": "T0081",
+    "expected_recommendation": "escalate",
+    "expected_flag_reason": "velocity_spike",
+    "reasoning": "Third transaction on this account in about 16 hours (T0063 $164.50, T0049 $57.04, T0081 $79.43), spread across three different locations and three unrelated merchants, and the first is already well above the customer's $89.12 typical ceiling. Matches the velocity doc's escalate signals (burst + different locations + an above-range amount) even though T0081's own amount is ordinary. First velocity_spike escalate case; added 2026-11-05 from the transaction data alone, before any agent run. Three warning signs in the burst: above-range amount (T0063), and two away-from-home members (T0049, T0081)."
   }
 ]
