@@ -1,0 +1,24 @@
+# Secrets -- the Gemini key is passed at run time with --env-file,
+# never baked into the image.
+.env
+.env.*
+!.env.example
+
+# Local Python environment and caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Built inside the image by `python src/retrieval.py`, so a stale
+# local copy must not overwrite it.
+chroma_db/
+
+# Not needed to run the API
+.git/
+.gitignore
+.vscode/
+*.code-workspace
+docs/
+notebooks/
+.DS_Store

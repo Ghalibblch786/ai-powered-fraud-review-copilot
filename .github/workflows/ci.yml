@@ -1,0 +1,40 @@
+name: CI
+
+# SCOPE.md: "CI running evals on push."
+on:
+  push:
+  workflow_dispatch:   # also lets you start a run by hand from the Actions tab
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # chroma_db/ is git-ignored, so CI builds it fresh -- same as the
+      # Dockerfile does. Without it, retrieval would return nothing.
+      - name: Build Chroma knowledge base
+        run: python src/retrieval.py
+
+      # A fixed 6-case subset, not all 18: a full run takes ~10 minutes and
+      # spends free-tier Gemini quota on every push. Chosen by name (not
+      # --limit 6) so the same cases run every time even if eval_set.json
+      # is reordered. Covers all four flag types, 3 escalate / 3 clear, and
+      # includes T0143 (relabeled Day 6) and T0133 (the new-account case).
+      # The 80% bar means 5/6 passes, so one flaky miss won't fail CI.
+      - name: Run eval subset
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python -m eval.run_eval --only T0116,T0011,T0078,T0143,T0018,T0133
