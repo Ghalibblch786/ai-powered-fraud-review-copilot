@@ -81,6 +81,39 @@ def query_knowledge_base(query_text, n_results=1):
     results = collection.query(query_texts=[query_text], n_results=n_results)
     return results
 
+# Each flag_reason maps to a plain-English sentence. We search with the
+# sentence, not the raw flag word -- sentences match meaning better
+# (see CLAUDE.md conventions).
+FLAG_QUERIES = {
+    "velocity_spike": "Multiple transactions happened within a short time window",
+    "geo_anomaly": "The transaction occurred in a location different from the customer's home location",
+    "amount_spike": "The transaction amount is much higher than this customer normally spends",
+    "new_merchant_category": "The customer made a purchase in a merchant category they've never used before",
+}
+
+
+def retrieve_for_flag(flag_reason):
+    """
+    Turn a flag_reason into a sentence, search the knowledge base,
+    and return the single best-matching document in a simple dict.
+    """
+    if flag_reason not in FLAG_QUERIES:
+        raise ValueError(
+            f"Unknown flag_reason {flag_reason!r}. "
+            f"Expected one of: {sorted(FLAG_QUERIES)}"
+        )
+
+    query_text = FLAG_QUERIES[flag_reason]
+    results = query_knowledge_base(query_text, n_results=1)
+
+    return {
+        "flag_reason": flag_reason,
+        "query": query_text,
+        "doc_id": results["ids"][0][0],
+        "source": results["metadatas"][0][0]["source"],
+        "distance": results["distances"][0][0],
+        "text": results["documents"][0][0],
+    }
 
 def _print_query_result(query_text, n_results=2):
     results = query_knowledge_base(query_text, n_results=n_results)
